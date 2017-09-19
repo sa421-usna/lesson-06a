@@ -1,0 +1,135 @@
+---
+title: "Lesson 6a. Presenting Input Data Analysis"
+author: "Assoc. Prof. D. Phillips and N. Uhan"
+date: "SA421 -- Simulation Modeling -- Fall 2017"
+output:
+  html_notebook:
+    css: css/sa421.css
+---
+
+# What should be in an input data analysis report?
+
+For __each set of input data__, your report should contain:
+
+* A description of the "candidate" distributions that you will fit to the
+  input data, including why you chose these distributions.
+  
+    - Use histograms, aspects of the data itself, and context (i.e., where is
+      the data from) to support your selection.
+      
+    - For this course, we will only use the following distributions: uniform,
+      normal, gamma, and exponential.
+    
+* An evaluation of the fit for each candidate distribution, including:
+
+    - a graph comparing a histogram of the data with plots of the candidate
+      distribution densities,
+    
+    - the AIC, BIC, and K-S statistic for each candidate distribution,
+      presented in a table.
+
+* Finally, a conclusion with your choice of distribution as well as the
+  arguments for the choice.
+
+
+# Reading data 
+
+* Data comes in a variety of formats.
+
+* Luckily, there are many R functions and packages that help us read data into R.
+
+* We've already seen:
+
+    - `read.table()` from base R,
+    
+    - `read_excel()` from the `readxl` package
+    
+* [Here is the documentation for base R functions that read different kinds of R data, including CSV files.](https://www.rdocumentation.org/packages/utils/versions/3.4.1/topics/read.table)
+
+
+# Making things pretty
+
+* Let's use the arrival data from Lesson 6 to illustrate:
+
+```{r}
+# Load readxl - package for reading Excel files
+library(readxl)
+
+# Read arrival times from Excel file
+arrival.data <- read_excel('cafe-data.xlsx', range = 'Sheet1!A2:A88', col_names = 'arrival.time')
+
+# Load dplyr
+library(dplyr)
+
+# Sort arrival times 
+# Compute interarrival times in seconds, convert to numeric 
+# Assume that simultaneous arrivals are in fact 1 second apart
+# Remove NA data
+arrival.data <- arrival.data %>%
+  arrange(arrival.time) %>%
+  mutate(interarrival.time = as.numeric(arrival.time - lag(arrival.time))) %>% 
+  mutate(interarrival.time = if_else(interarrival.time <= 0, 1, interarrival.time)) %>%
+  filter(!is.na(interarrival.time))
+
+# Load fitdistrplus package
+library(fitdistrplus)
+
+# Find maximum likelihood estimator for exponential distribution
+interarrival.fit.exp <- fitdist(arrival.data$interarrival.time, "exp")
+
+# Find maximum likelihood estimator for gamma distribution
+interarrival.fit.gamma <- fitdist(arrival.data$interarrival.time, "gamma")
+
+# Calculate goodness-of-fit staistics/criteria
+interarrival.gof <- gofstat(list(interarrival.fit.exp, interarrival.fit.gamma), 
+                            fitnames = c('exponential', 'gamma'))
+```
+
+* The graphs output by the functions in the `fitdistplus` package -- like
+  `denscomp` and `cdfcomp` do  nice job of creating publication-quality
+  graphs.
+
+* How can we present the maximum likelihood estimation results in a
+  professional manner?
+
+* __Don't__ simply print the summary of `fitdist` like this: 
+
+```{r}
+# Show maximum likelihood estimator for exponential distribution
+summary(interarrival.fit.exp)
+```
+
+* We can get the estimate of the rate parameter above individually with:
+
+```{r}
+interarrival.fit.exp$estimate['rate']
+```
+
+
+* So, instead, just write a sentence explaining what maximum likelihood
+  estimation finds. For example:
+    
+    > Assuming our data fits an exponential distribution, maximum likelihood 
+    > estimation indicates that our data best fits such a distribution with a rate 
+    > parameter `r interarrival.fit.exp$estimate['rate']`.
+    
+    - You can incorporate __any__ R variable into your R Markdown text using the technique above. 
+    
+* Now, how about the goodness-of-fit criteria and statistics?
+
+* If we just print the results, it doesn't look very professional, and it includes information we are not going to use:
+
+```{r}
+print(interarrival.gof)
+```
+
+* Instead, we can create a table directly in R Markdown with the information we want. One way to do this is below.
+  (You may want to extend the width of the code editor, or turn off line wrapping, to see how this code works.)
+
+|                              | Exponential                             | Gamma                             |
+| -----------------------------| --------------------------------------: | --------------------------------: |
+| Kolmogorov-Smirnov statistic | `r interarrival.gof$ks['exponential']`  | `r interarrival.gof$ks['gamma']`  |
+| AIC                          | `r interarrival.gof$aic['exponential']` | `r interarrival.gof$aic['gamma']` | 
+| BIC                          | `r interarrival.gof$bic['exponential']` | `r interarrival.gof$bic['gamma']` | 
+
+* [Here is the documentation on tables in R Markdown](http://rmarkdown.rstudio.com/authoring_pandoc_markdown.html#tables) -- the above table is called a "pipe table."
